@@ -10,6 +10,8 @@ import {
   signInAccount,
   setCurrentUserSession,
 } from '../utils/storage';
+import { db, isFirebaseConfigured } from '../firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { MapPin, Eye, EyeOff, ShieldCheck, Check } from 'lucide-react';
 
 interface AuthGatePageProps {
@@ -26,6 +28,7 @@ export const AuthGatePage: React.FC<AuthGatePageProps> = ({ onAuthenticated }) =
   const [agreedTerms, setAgreedTerms] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Password strength (0 to 4) for signup
   const passwordStrength = (() => {
@@ -46,7 +49,7 @@ export const AuthGatePage: React.FC<AuthGatePageProps> = ({ onAuthenticated }) =
     'bg-[#21524B]',
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -56,59 +59,84 @@ export const AuthGatePage: React.FC<AuthGatePageProps> = ({ onAuthenticated }) =
       return;
     }
 
-    if (mode === 'signup') {
-      if (!name.trim()) {
-        setErrorMsg('Please enter your full name so your contributions are verified.');
-        return;
-      }
-      if (password.length < 6) {
-        setErrorMsg('Please use at least 6 characters for your password.');
-        return;
-      }
-      if (password !== confirmPassword) {
-        setErrorMsg('Passwords do not match.');
-        return;
-      }
-      if (!agreedTerms) {
-        setErrorMsg('Please agree to the community anti-trolling pledge to continue.');
-        return;
-      }
+    setIsSubmitting(true);
+    try {
+      if (mode === 'signup') {
+        if (!name.trim()) {
+          setErrorMsg('Please enter your full name so your contributions are verified.');
+          return;
+        }
+        if (password.length < 6) {
+          setErrorMsg('Please use at least 6 characters for your password.');
+          return;
+        }
+        if (password !== confirmPassword) {
+          setErrorMsg('Passwords do not match.');
+          return;
+        }
+        if (!agreedTerms) {
+          setErrorMsg('Please agree to the community anti-trolling pledge to continue.');
+          return;
+        }
 
-      const res = registerAccount(name, email, password, role);
-      if (res.error) {
-        setErrorMsg(res.error);
-        return;
+        const res = await registerAccount(name, email, password, role);
+        if (res.error) {
+          setErrorMsg(res.error);
+          return;
+        }
+        if (res.user) {
+          onAuthenticated(res.user);
+        }
+      } else {
+        if (!password) {
+          setErrorMsg('Please enter your password.');
+          return;
+        }
+        const res = await signInAccount(email, password);
+        if (res.error) {
+          setErrorMsg(res.error);
+          return;
+        }
+        if (res.user) {
+          onAuthenticated(res.user);
+        }
       }
-      if (res.user) {
-        onAuthenticated(res.user);
-      }
-    } else {
-      if (!password) {
-        setErrorMsg('Please enter your password.');
-        return;
-      }
-      const res = signInAccount(email, password);
-      if (res.error) {
-        setErrorMsg(res.error);
-        return;
-      }
-      if (res.user) {
-        onAuthenticated(res.user);
-      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Authentication failed. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleGoogleContinue = () => {
-    // Ready for Firebase signInWithPopup(auth, googleProvider)
-    const googleUser: AuthUser = {
-      id: `google-${Date.now()}`,
-      name: name.trim() || email.split('@')[0] || 'Verified Mapper',
-      email: email.trim() || 'mapper@tanaw.ph',
-      role,
-      createdAt: new Date().toISOString(),
-    };
-    setCurrentUserSession(googleUser);
-    onAuthenticated(googleUser);
+  const handleGoogleContinue = async () => {
+    setIsSubmitting(true);
+    try {
+      const googleId = `google-${Date.now()}`;
+      const googleUser: AuthUser = {
+        id: googleId,
+        name: name.trim() || email.split('@')[0] || 'Verified Mapper',
+        email: email.trim() || 'mapper@tanaw.ph',
+        role,
+        createdAt: new Date().toISOString(),
+      };
+      if (isFirebaseConfigured && db) {
+        await setDoc(
+          doc(db, 'users', googleId),
+          {
+            ...googleUser,
+            provider: 'google',
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      }
+      setCurrentUserSession(googleUser);
+      onAuthenticated(googleUser);
+    } catch (err: any) {
+      console.warn('Google sign-in fallback:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -367,9 +395,14 @@ export const AuthGatePage: React.FC<AuthGatePageProps> = ({ onAuthenticated }) =
 
             <button
               type="submit"
-              className="w-full h-12 mt-2 rounded-full bg-[#21524B] hover:bg-[#2B685F] text-white font-bold text-sm border-2 border-[#0F172A] shadow-[0_3px_0_#0F172A] hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer"
+              disabled={isSubmitting}
+              className="w-full h-12 mt-2 rounded-full bg-[#21524B] hover:bg-[#2B685F] disabled:opacity-60 text-white font-bold text-sm border-2 border-[#0F172A] shadow-[0_3px_0_#0F172A] hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer"
             >
-              {mode === 'signin' ? 'Sign in to TanAW' : 'Create verified account'}
+              {isSubmitting
+                ? 'Connecting to Firebase...'
+                : mode === 'signin'
+                ? 'Sign in to TanAW'
+                : 'Create verified account'}
             </button>
           </form>
 

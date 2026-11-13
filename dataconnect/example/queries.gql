@@ -1,0 +1,129 @@
+mutation InsertUser {
+  user_insert(data: {id_expr: "auth.uid", username: "example", email: "test@example.com", pointsScore: 0})
+}
+
+mutation UpdateUser($username: String!) @auth(level: USER) {
+  user_update(key: {id_expr: "auth.uid"}, data: {username: $username})
+}
+
+mutation DeleteUser @auth(level: USER) {
+  user_delete(key: {id_expr: "auth.uid"})
+}
+
+query GetMyUser @auth(level: USER) {
+  user(key: {id_expr: "auth.uid"}) {
+    username
+    pointsScore
+  }
+}
+
+query ListUsers @auth(level: PUBLIC, insecureReason: "Listing users is necessary for community discovery.") {
+  users {
+    username
+  }
+}
+
+mutation InsertLocation($name: String!, $lat: Float!, $lon: Float!, $addr: String!) @auth(level: USER) {
+  location_insert(data: {name: $name, latitude: $lat, longitude: $lon, address: $addr})
+}
+
+mutation UpdateLocation($id: UUID!, $website: String!) @auth(level: USER) {
+  location_update(key: {id: $id}, data: {website: $website})
+}
+
+mutation DeleteLocation($id: UUID!) @auth(level: USER) {
+  location_delete(key: {id: $id})
+}
+
+query GetLocation($id: UUID!) @auth(level: PUBLIC, insecureReason: "Location details are public.") {
+  location(id: $id) {
+    name
+    address
+  }
+}
+
+query ListLocations @auth(level: PUBLIC, insecureReason: "Publicly accessible location list.") {
+  locations {
+    name
+    latitude
+    longitude
+  }
+}
+
+mutation InsertAccessibility($locId: UUID!, $rating: Float!) @auth(level: USER) {
+  accessibilityProfile_insert(data: {locationId: $locId, overallRating: $rating, isVerified: false})
+}
+
+mutation UpdateAccessibility($id: UUID!, $hasRamp: Boolean!) @auth(level: USER) {
+  accessibilityProfile_update(key: {id: $id}, data: {hasRamp: $hasRamp})
+}
+
+mutation DeleteAccessibility($id: UUID!) @auth(level: USER) {
+  accessibilityProfile_delete(key: {id: $id})
+}
+
+query GetAccessibility($id: UUID!) @auth(level: PUBLIC, insecureReason: "Publicly accessible accessibility data.") {
+  accessibilityProfile(id: $id) {
+    overallRating
+    isVerified
+  }
+}
+
+query ListAccessibilityProfiles @auth(level: PUBLIC, insecureReason: "Publicly accessible accessibility list.") {
+  accessibilityProfiles {
+    overallRating
+    hasRamp
+  }
+}
+
+mutation InsertMedia($locId: UUID!, $url: String!) @auth(level: USER) {
+  mediaAsset_insert(data: {locationId: $locId, url: $url, analysisStatus: "PENDING", uploadedById_expr: "auth.uid"})
+}
+
+mutation UpdateMedia($id: UUID!, $status: String!) @auth(level: USER) {
+  mediaAsset_update(key: {id: $id}, data: {analysisStatus: $status})
+}
+
+mutation DeleteMedia($id: UUID!) @auth(level: USER) {
+  mediaAsset_delete(key: {id: $id})
+}
+
+query GetMedia($id: UUID!) @auth(level: PUBLIC, insecureReason: "Media assets are public.") {
+  mediaAsset(id: $id) {
+    url
+    analysisStatus
+  }
+}
+
+query ListMedia @auth(level: PUBLIC, insecureReason: "Publicly accessible media.") {
+  mediaAssets {
+    url
+    analysisStatus
+  }
+}
+
+mutation InsertReport($locId: UUID!, $type: String!, $ts: Timestamp!) @auth(level: USER) {
+  report_insert(data: {locationId: $locId, userId_expr: "auth.uid", reportType: $type, timestamp: $ts})
+}
+
+mutation UpdateReport($id: UUID!, $comments: String!) @auth(level: USER) {
+  report_update(key: {id: $id}, data: {comments: $comments})
+}
+
+mutation DeleteReport($id: UUID!) @auth(level: USER) {
+  report_delete(key: {id: $id})
+}
+
+query GetReport($id: UUID!) @auth(level: USER) {
+  report(id: $id) {
+    reportType
+    comments
+  }
+}
+
+query ListReports @auth(level: USER) {
+  reports(where: {userId: {eq_expr: "auth.uid"}}) {
+    reportType
+    timestamp
+  }
+}

@@ -327,4 +327,14 @@ AccessMap is an open-source, crowdsourced urban accessibility platform designed 
 - **Decisions**:
   - Added clear Vision, Target Audience, Core Values, and Stakeholder sections to improve onboarding.
   - Streamlined introductory description for brevity and impact.
-- **Impact**: Improves first‑time reader comprehension and aligns documentation with project goals.
+- **Impact**: Improves first-time reader comprehension and aligns documentation with project goals.
+
+---
+
+## `2026-11-14 01:04:45` — GitHub Pages Deployment Setup
+- **Event**: Prepared the repository for static hosting on GitHub Pages.
+- **Changes**:
+  - Added `.github/workflows/deploy-pages.yml` to build `dist/` with `npm ci` + `vite build` and deploy it via the official Pages actions.
+  - Documented the deployment steps and optional Firebase/Gemini configuration in `README.md`.
+  - Ignored the scratch `new/` folder and removed the unused local `@dataconnect/generated` file dependency (nothing imports it).
+- **Impact**: Pushing to `main` publishes the app at `https://<owner>.github.io/TanAW/`. Firebase and live Gemini analysis stay optional so no secrets enter the public bundle.

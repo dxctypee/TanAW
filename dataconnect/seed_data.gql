@@ -1,0 +1,27 @@
+mutation SeedDatabase @transaction {
+  user_insertMany(data: [
+    { username: "alice_dev", email: "alice@example.com", pointsScore: 150 },
+    { username: "bob_explorer", email: "bob@example.com", pointsScore: 200 },
+    { username: "charlie_qc", email: "charlie@example.com", pointsScore: 50 }
+  ])
+  location_insertMany(data: [
+    { name: "Central Park", latitude: 40.785091, longitude: -73.968285, address: "New York, NY", website: "https://centralpark.org", phoneNumber: "555-0101" },
+    { name: "Public Library", latitude: 40.7532, longitude: -73.9822, address: "476 5th Ave, NY", website: "https://nypl.org", phoneNumber: "555-0102" },
+    { name: "Grand Central", latitude: 40.7527, longitude: -73.9772, address: "89 E 42nd St, NY", website: "https://grandcentral.org", phoneNumber: "555-0103" }
+  ])
+  accessibilityProfile_insertMany(data: [
+    { location: { id: "00000000-0000-0000-0000-000000000001" }, overallRating: 4.5, isVerified: true, hasRamp: true, hasAutomaticDoors: true, wideAisleWidth: 36.5, brailleSignagePresent: true },
+    { location: { id: "00000000-0000-0000-0000-000000000002" }, overallRating: 3.8, isVerified: true, hasRamp: true, hasAutomaticDoors: false, wideAisleWidth: 32.0, brailleSignagePresent: true },
+    { location: { id: "00000000-0000-0000-0000-000000000003" }, overallRating: 5.0, isVerified: false, hasRamp: true, hasAutomaticDoors: true, wideAisleWidth: 40.0, brailleSignagePresent: false }
+  ])
+  mediaAsset_insertMany(data: [
+    { location: { id: "00000000-0000-0000-0000-000000000001" }, url: "https://cdn.example.com/p1.jpg", analysisStatus: "COMPLETED", geminiAnalysisResult: "{\"ramp_detected\": true}", uploadedBy: { id: "00000000-0000-0000-0000-000000000001" } },
+    { location: { id: "00000000-0000-0000-0000-000000000002" }, url: "https://cdn.example.com/p2.jpg", analysisStatus: "PENDING", geminiAnalysisResult: null, uploadedBy: { id: "00000000-0000-0000-0000-000000000002" } },
+    { location: { id: "00000000-0000-0000-0000-000000000003" }, url: "https://cdn.example.com/p3.jpg", analysisStatus: "COMPLETED", geminiAnalysisResult: "{\"aisle_width\": 40}", uploadedBy: { id: "00000000-0000-0000-0000-000000000003" } }
+  ])
+  report_insertMany(data: [
+    { location: { id: "00000000-0000-0000-0000-000000000001" }, user: { id: "00000000-0000-0000-0000-000000000001" }, reportType: "ACCESSIBILITY_ISSUE", timestamp: "2023-10-27T10:00:00Z", comments: "Ramp blocked by debris", photoEvidenceUrl: "https://cdn.example.com/r1.jpg" },
+    { location: { id: "00000000-0000-0000-0000-000000000002" }, user: { id: "00000000-0000-0000-0000-000000000002" }, reportType: "DOOR_FAILURE", timestamp: "2023-10-28T14:30:00Z", comments: "Automatic door stuck", photoEvidenceUrl: null },
+    { location: { id: "00000000-0000-0000-0000-000000000003" }, user: { id: "00000000-0000-0000-0000-000000000003" }, reportType: "SIGNAGE_MISSING", timestamp: "2023-10-29T09:15:00Z", comments: "Braille missing near entrance", photoEvidenceUrl: "https://cdn.example.com/r3.jpg" }
+  ])
+}

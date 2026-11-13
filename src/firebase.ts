@@ -7,6 +7,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
+import { getAuth } from 'firebase/auth';
 
 // Read config from Vite environment variables (VITE_FIREBASE_*)
 const firebaseConfig = {
@@ -33,3 +34,4 @@ export const app = isFirebaseConfigured
 export const db = app ? getFirestore(app) : null;
 export const storage = app ? getStorage(app) : null;
 export const functions = app ? getFunctions(app) : null;
+export const auth = app ? getAuth(app) : null;

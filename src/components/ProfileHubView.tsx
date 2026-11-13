@@ -102,10 +102,10 @@ export const ProfileHubView: React.FC<ProfileHubViewProps> = ({
       .filter((item): item is NonNullable<typeof item> => item !== null);
   }, [userVotes, locations]);
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nameInput.trim()) return;
-    const updated = updateUserProfile({
+    const updated = await updateUserProfile({
       ...currentUser,
       name: nameInput.trim(),
       role: roleInput,

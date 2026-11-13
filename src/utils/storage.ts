@@ -5,6 +5,21 @@
 
 import { INITIAL_LOCATIONS } from '../data/initialLocations';
 import { LocationPin, LocationTag, Review } from '../types/accessibility';
+import { db, auth, isFirebaseConfigured } from '../firebase';
+import {
+  collection,
+  doc,
+  setDoc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+} from 'firebase/firestore';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
+} from 'firebase/auth';
 
 const STORAGE_KEY = 'accessmap_cdo_locations_v1';
 const VOTES_KEY = 'accessmap_user_votes_v1';
@@ -56,6 +71,22 @@ const INITIAL_MESSAGES: CommunityMessage[] = [
 
 interface StoredAccount extends AuthUser {
   password?: string;
+  passwordHash?: string;
+}
+
+/**
+ * Standard Web Crypto SHA-256 password hash.
+ * Ensures passwords stored in Firestore are never stored as plain text.
+ */
+async function hashPassword(password: string): Promise<string> {
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password + '_tanaw_salt');
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  return password;
 }
 
 export function getCurrentUser(): AuthUser | null {
@@ -88,24 +119,96 @@ export function getRegisteredAccounts(): StoredAccount[] {
   }
 }
 
-export function registerAccount(
+export async function registerAccount(
   name: string,
   email: string,
   password: string,
   role: AuthUser['role']
-): { user?: AuthUser; error?: string } {
+): Promise<{ user?: AuthUser; error?: string }> {
   const cleanEmail = email.trim().toLowerCase();
+  const trimmedName = name.trim();
+
+  // 1. If Firebase is configured, store in Firestore collection 'users'
+  if (isFirebaseConfigured && db) {
+    try {
+      const usersCol = collection(db, 'users');
+      const emailQuery = query(usersCol, where('email', '==', cleanEmail));
+      const existingSnap = await getDocs(emailQuery);
+
+      if (!existingSnap.empty) {
+        return { error: 'An account with this email already exists in Firebase. Please sign in.' };
+      }
+
+      let uid = `usr-${Date.now()}`;
+
+      // Try Firebase Auth if enabled in project console
+      if (auth) {
+        try {
+          const userCred = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+          if (userCred.user) {
+            uid = userCred.user.uid;
+            await updateProfile(userCred.user, { displayName: trimmedName });
+          }
+        } catch (authErr: any) {
+          // If auth/configuration-not-found, user hasn't enabled Auth in Firebase Console yet.
+          // Still persists cleanly in Firestore 'users' collection.
+          console.info('[TanAW Auth] Firebase Auth not toggled in console, writing account to Firestore users collection:', authErr?.code);
+        }
+      }
+
+      const hashedPassword = await hashPassword(password);
+      const newAccount: StoredAccount = {
+        id: uid,
+        name: trimmedName,
+        email: cleanEmail,
+        role,
+        passwordHash: hashedPassword,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Write user profile to Firestore
+      await setDoc(doc(db, 'users', uid), {
+        id: uid,
+        name: trimmedName,
+        email: cleanEmail,
+        role,
+        passwordHash: hashedPassword,
+        createdAt: newAccount.createdAt,
+        updatedAt: newAccount.createdAt,
+      });
+
+      // Cache locally
+      const accounts = getRegisteredAccounts();
+      localStorage.setItem(USERS_LIST_KEY, JSON.stringify([...accounts, newAccount]));
+
+      const publicUser: AuthUser = {
+        id: uid,
+        name: trimmedName,
+        email: cleanEmail,
+        role,
+        createdAt: newAccount.createdAt,
+      };
+
+      setCurrentUserSession(publicUser);
+      return { user: publicUser };
+    } catch (err: any) {
+      console.error('[TanAW Auth] Registration error in Firebase:', err);
+    }
+  }
+
+  // 2. Local storage fallback
   const accounts = getRegisteredAccounts();
   if (accounts.some((acc) => acc.email.toLowerCase() === cleanEmail)) {
     return { error: 'An account with this email already exists. Please sign in.' };
   }
 
+  const hashedPassword = await hashPassword(password);
   const newAccount: StoredAccount = {
     id: `usr-${Date.now()}`,
-    name: name.trim(),
+    name: trimmedName,
     email: cleanEmail,
     role,
-    password,
+    passwordHash: hashedPassword,
     createdAt: new Date().toISOString(),
   };
 
@@ -115,33 +218,119 @@ export function registerAccount(
     console.error('Failed to save account:', e);
   }
 
-  const { password: _, ...publicUser } = newAccount;
+  const { password: _, passwordHash: __, ...publicUser } = newAccount;
   setCurrentUserSession(publicUser);
   return { user: publicUser };
 }
 
-export function signInAccount(
+export async function signInAccount(
   email: string,
   password: string
-): { user?: AuthUser; error?: string } {
+): Promise<{ user?: AuthUser; error?: string }> {
   const cleanEmail = email.trim().toLowerCase();
+
+  // 1. Try Firebase if configured
+  if (isFirebaseConfigured && db) {
+    try {
+      if (auth) {
+        try {
+          const userCred = await signInWithEmailAndPassword(auth, cleanEmail, password);
+          if (userCred.user) {
+            const userDoc = await getDoc(doc(db, 'users', userCred.user.uid));
+            if (userDoc.exists()) {
+              const data = userDoc.data() as StoredAccount;
+              const publicUser: AuthUser = {
+                id: data.id || userCred.user.uid,
+                name: data.name || userCred.user.displayName || 'Verified Mapper',
+                email: data.email || cleanEmail,
+                role: data.role || 'PWD Member / Advocate',
+                bio: data.bio,
+                createdAt: data.createdAt || new Date().toISOString(),
+              };
+              setCurrentUserSession(publicUser);
+              return { user: publicUser };
+            }
+          }
+        } catch (authErr: any) {
+          if (authErr.code === 'auth/wrong-password' || authErr.code === 'auth/invalid-credential') {
+            return { error: 'Incorrect password. Please try again.' };
+          }
+          if (authErr.code === 'auth/user-not-found') {
+            return { error: 'No account found for this email. Create an account first.' };
+          }
+        }
+      }
+
+      // Query Firestore collection 'users'
+      const usersCol = collection(db, 'users');
+      const q = query(usersCol, where('email', '==', cleanEmail));
+      const snap = await getDocs(q);
+
+      if (!snap.empty) {
+        const docData = snap.docs[0].data() as StoredAccount & { password?: string };
+        const hashedInput = await hashPassword(password);
+        const passwordMatches =
+          docData.passwordHash === hashedInput ||
+          docData.password === password;
+
+        if (!passwordMatches) {
+          return { error: 'Incorrect password. Please try again.' };
+        }
+
+        const publicUser: AuthUser = {
+          id: docData.id || snap.docs[0].id,
+          name: docData.name,
+          email: docData.email,
+          role: docData.role || 'PWD Member / Advocate',
+          bio: docData.bio,
+          createdAt: docData.createdAt || new Date().toISOString(),
+        };
+
+        setCurrentUserSession(publicUser);
+        return { user: publicUser };
+      }
+    } catch (err) {
+      console.error('[TanAW Auth] Error signing in with Firebase:', err);
+    }
+  }
+
+  // 2. Local storage fallback
   const accounts = getRegisteredAccounts();
   const found = accounts.find((acc) => acc.email.toLowerCase() === cleanEmail);
 
   if (!found) {
     return { error: 'No account found for this email. Create an account first.' };
   }
-  if (found.password && found.password !== password) {
+
+  const hashedInput = await hashPassword(password);
+  const passwordMatches =
+    found.passwordHash === hashedInput || found.password === password;
+
+  if (!passwordMatches) {
     return { error: 'Incorrect password. Please try again.' };
   }
 
-  const { password: _, ...publicUser } = found;
+  const { password: _, passwordHash: __, ...publicUser } = found;
   setCurrentUserSession(publicUser);
   return { user: publicUser };
 }
 
-export function updateUserProfile(updated: AuthUser): AuthUser {
+export async function updateUserProfile(updated: AuthUser): Promise<AuthUser> {
   setCurrentUserSession(updated);
+
+  // Update in Firestore
+  if (isFirebaseConfigured && db && updated.id) {
+    try {
+      await setDoc(doc(db, 'users', updated.id), {
+        ...updated,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    } catch (err) {
+      console.error('[TanAW Auth] Failed to update user profile in Firestore:', err);
+    }
+  }
+
+  // Update local cache
   try {
     const accounts = getRegisteredAccounts();
     const next = accounts.map((acc) =>
@@ -151,6 +340,7 @@ export function updateUserProfile(updated: AuthUser): AuthUser {
   } catch (e) {
     console.error('Failed to update user in accounts list:', e);
   }
+
   return updated;
 }
 

@@ -26,6 +26,7 @@
 - [Getting Started](#getting-started)
 - [Project Structure](#project-structure)
 - [Development Workflow](#development-workflow)
+- [Deploying to GitHub Pages](#deploying-to-github-pages)
 - [Contributing](#contributing)
 - [Documentation](#documentation)
 - [License](#license)
@@ -134,6 +135,20 @@ AcessMap/
 - Push your branch to `origin` (`https://github.com/David-Py24/AccessMap-.git`) and open a pull request targeting `main`.
 - Keep frontend module changes in their owning repository/branch, then integrate through pull requests.
 - Do not commit secrets or credentials; use `.env.example` for variable names.
+
+## Deploying to GitHub Pages
+
+The app deploys as a static Vite build through `.github/workflows/deploy-pages.yml`.
+
+1. In the repository, open **Settings → Pages → Build and deployment** and set **Source** to **GitHub Actions**.
+2. Push to `main`, or run **Deploy to GitHub Pages** manually from the **Actions** tab.
+3. The site is published at `https://<owner>.github.io/TanAW/`.
+
+Notes:
+
+- The app runs without Firebase: sign-in and location data fall back to `localStorage`. To enable Firebase, add repository Actions variables named `VITE_FIREBASE_*` (see `.env.example`); the workflow passes them to the build.
+- AI storefront analysis uses the `analyzeStorefront` Cloud Function. Deploy it with `firebase deploy --only functions` and set the Gemini key as a function secret; otherwise the app shows the simulated result.
+- Never set `GEMINI_API_KEY` or `VITE_GEMINI_API_KEY` for the Pages build — Vite inlines `VITE_*` values into the public JavaScript bundle.
 
 ## Contributing
 

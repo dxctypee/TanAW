@@ -1,0 +1,42 @@
+type User @table {
+  username: String!
+  email: String!
+  pointsScore: Int!
+  accessibilityPreferences: String # JSON stored as string
+}
+
+type Location @table {
+  name: String!
+  latitude: Float!
+  longitude: Float!
+  address: String!
+  website: String
+  phoneNumber: String
+}
+
+type AccessibilityProfile @table {
+  location: Location!
+  overallRating: Float!
+  isVerified: Boolean!
+  hasRamp: Boolean
+  hasAutomaticDoors: Boolean
+  wideAisleWidth: Float
+  brailleSignagePresent: Boolean
+}
+
+type MediaAsset @table {
+  location: Location!
+  url: String!
+  analysisStatus: String!
+  geminiAnalysisResult: String # JSON stored as string
+  uploadedBy: User
+}
+
+type Report @table {
+  location: Location!
+  user: User!
+  reportType: String!
+  timestamp: Timestamp!
+  comments: String
+  photoEvidenceUrl: String
+}
